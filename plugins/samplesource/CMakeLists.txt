@@ -55,6 +55,11 @@ if(LIBUSB_FOUND AND LIMESUITE_FOUND)
     add_subdirectory(limesdrinput)
 endif(LIBUSB_FOUND AND LIMESUITE_FOUND)
 
+find_package(LibXTRX)
+if(LIBXTRX_FOUND)
+	add_subdirectory(xtrx)
+endif(LIBXTRX_FOUND)
+
 find_package(LibIIO)
 if(LIBUSB_FOUND AND LIBIIO_FOUND)
     add_subdirectory(plutosdrinput)
