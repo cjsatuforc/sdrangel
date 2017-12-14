@@ -890,7 +890,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
         if (doLPCalibration)
         {
             if (xtrx_tune_rx_bandwidth(m_deviceShared.m_deviceParams->getDevice(),
-                                       m_deviceShared.m_channel ? XTRX_CH_B : XTRX_CH_A,
+                                       m_deviceShared.m_channel,
                                        m_settings.m_lpfBW,
                                        NULL) < 0)
             {
