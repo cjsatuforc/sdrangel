@@ -266,7 +266,7 @@ void XTRXInput::resumeTxBuddies()
 
 void XTRXInput::closeDevice()
 {
-    if (m_deviceShared.m_deviceParams->getDevice() == 0) { // was never open
+	if (m_deviceShared.m_deviceParams == 0 || m_deviceShared.m_deviceParams->getDevice() == 0) { // was never open
         return;
     }
 
@@ -423,6 +423,7 @@ uint32_t XTRXInput::getHWLog2Decim() const
 
 bool XTRXInput::handleMessage(const Message& message)
 {
+	bool deviceOk = m_deviceShared.m_deviceParams && m_deviceShared.m_deviceParams->getDevice();
     if (MsgConfigureXTRX::match(message))
     {
         MsgConfigureXTRX& conf = (MsgConfigureXTRX&) message;
@@ -491,7 +492,7 @@ bool XTRXInput::handleMessage(const Message& message)
     {
         qDebug() << "XTRXInput::handleMessage: MsgGetStreamInfo";
 
-        if (m_deviceAPI->getSampleSourceGUIMessageQueue())
+		if (deviceOk && m_deviceAPI->getSampleSourceGUIMessageQueue())
         {
             uint64_t fifolevel;
 
@@ -516,8 +517,7 @@ bool XTRXInput::handleMessage(const Message& message)
     else if (MsgGetDeviceInfo::match(message))
     {
         double temp = 0.0;
-        if (m_deviceShared.m_deviceParams->getDevice() && (
-                    (temp = m_deviceShared.get_temperature() / 256.0) != 0.0))
+		if (deviceOk && ((temp = m_deviceShared.get_temperature() / 256.0) != 0.0))
         {
             qDebug("XTRXInput::handleMessage: MsgGetDeviceInfo: temperature: %f", temp);
         }
@@ -669,6 +669,8 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
     bool doGainTia = false;
     bool doGainPga = false;
 
+	bool deviceOk = m_deviceShared.m_deviceParams != NULL && m_deviceShared.m_deviceParams->getDevice() != NULL;
+
     // apply settings
 
     if ((m_settings.m_dcBlock != settings.m_dcBlock) || force)
@@ -681,44 +683,47 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
         m_deviceAPI->configureCorrections(settings.m_dcBlock, settings.m_iqCorrection);
     }
 
-    if ((m_settings.m_pwrmode != settings.m_pwrmode)) {
-        if (xtrx_val_set(m_deviceShared.m_deviceParams->getDevice(),
-                         XTRX_TRX, XTRX_CH_AB, XTRX_LMS7_PWR_MODE, settings.m_pwrmode) < 0)
-        {
-            qCritical("XTRXInput::applySettings: could not set power mode %d",
-                      settings.m_pwrmode);
-        }
-    }
 
-    if ((m_settings.m_extClock != settings.m_extClock) ||
-            (settings.m_extClock && (m_settings.m_extClockFreq != settings.m_extClockFreq)) || force)
-    {
+	if (deviceOk) {
+		if (m_settings.m_pwrmode != settings.m_pwrmode) {
+			if (xtrx_val_set(m_deviceShared.m_deviceParams->getDevice(),
+							 XTRX_TRX, XTRX_CH_AB, XTRX_LMS7_PWR_MODE, settings.m_pwrmode) < 0)
+			{
+				qCritical("XTRXInput::applySettings: could not set power mode %d",
+						  settings.m_pwrmode);
+			}
+		}
 
-        xtrx_set_ref_clk(m_deviceShared.m_deviceParams->getDevice(),
-                         (settings.m_extClock) ? settings.m_extClockFreq : 0,
-                         (settings.m_extClock) ? XTRX_CLKSRC_EXT : XTRX_CLKSRC_INT);
-        {
-            forwardClockSource = true;
-            doChangeSampleRate = true;
-            doChangeFreq = true;
-            qDebug("XTRXInput::applySettings: clock set to %s (Ext: %d Hz)",
-                   settings.m_extClock ? "external" : "internal",
-                   settings.m_extClockFreq);
-        }
-    }
+		if ((m_settings.m_extClock != settings.m_extClock) ||
+				(settings.m_extClock && (m_settings.m_extClockFreq != settings.m_extClockFreq)) || force)
+		{
+
+			xtrx_set_ref_clk(m_deviceShared.m_deviceParams->getDevice(),
+							 (settings.m_extClock) ? settings.m_extClockFreq : 0,
+							 (settings.m_extClock) ? XTRX_CLKSRC_EXT : XTRX_CLKSRC_INT);
+			{
+				forwardClockSource = true;
+				doChangeSampleRate = true;
+				doChangeFreq = true;
+				qDebug("XTRXInput::applySettings: clock set to %s (Ext: %d Hz)",
+					   settings.m_extClock ? "external" : "internal",
+					   settings.m_extClockFreq);
+			}
+		}
+	}
 
     if ((m_settings.m_devSampleRate != settings.m_devSampleRate)
             || (m_settings.m_log2HardDecim != settings.m_log2HardDecim) || force)
     {
         forwardChangeAllDSP = true; //m_settings.m_devSampleRate != settings.m_devSampleRate;
 
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (deviceOk && m_channelAcquired)
         {
             doChangeSampleRate = true;
         }
     }
 
-    if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+	if (m_channelAcquired)
     {
         if ((m_settings.m_gainMode != settings.m_gainMode) || force)
         {
@@ -756,7 +761,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
 
     if ((m_settings.m_lpfBW != settings.m_lpfBW) || force)
     {
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (deviceOk && m_channelAcquired)
         {
             doLPCalibration = true;
         }
@@ -766,7 +771,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
     if ((m_settings.m_lpfFIRBW != settings.m_lpfFIRBW) ||
             (m_settings.m_lpfFIREnable != settings.m_lpfFIREnable) || force)
     {
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (deviceOk != 0 && m_channelAcquired)
         {
             if (LMS_SetGFIRLPF(m_deviceShared.m_deviceParams->getDevice(),
                                LMS_CH_RX,
@@ -789,7 +794,6 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
     }
 #endif
 
-
     if ((m_settings.m_log2SoftDecim != settings.m_log2SoftDecim) || force)
     {
         forwardChangeOwnDSP = true;
@@ -804,7 +808,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
 
     if ((m_settings.m_antennaPath != settings.m_antennaPath) || force)
     {
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (deviceOk && m_channelAcquired)
         {
             if (xtrx_set_antenna(m_deviceShared.m_deviceParams->getDevice(),
                                  settings.m_antennaPath) < 0)
@@ -835,7 +839,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
 
     m_settings = settings;
 
-    if (doLPCalibration || doChangeSampleRate)
+	if (deviceOk && (doLPCalibration || doChangeSampleRate))
     {
         if (m_XTRXInputThread && m_XTRXInputThread->isRunning())
         {
@@ -911,6 +915,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
         }
     }
 
+	if (deviceOk) {
     if (doGainAuto)
     {
         apply_gain_auto(m_settings.m_gain);
@@ -932,7 +937,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
     {
         forwardChangeRxDSP = true;
 
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (m_channelAcquired)
         {
             if (xtrx_tune(m_deviceShared.m_deviceParams->getDevice(),
                           XTRX_TUNE_RX_FDD,
@@ -952,7 +957,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
 
     if (forceNCOFrequency)
     {
-        if (m_deviceShared.m_deviceParams->getDevice() != 0 && m_channelAcquired)
+		if (m_channelAcquired)
         {
             if (xtrx_tune(m_deviceShared.m_deviceParams->getDevice(),
                           XTRX_TUNE_BB_RX,
@@ -974,7 +979,7 @@ bool XTRXInput::applySettings(const XTRXInputSettings& settings, bool force, boo
             }
         }
     }
-
+	}
 
     // forward changes to buddies or oneself
 

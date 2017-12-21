@@ -59,27 +59,30 @@ void XTRXInputPlugin::initPlugin(PluginAPI* pluginAPI)
 
 PluginInterface::SamplingDevices XTRXInputPlugin::enumSampleSources()
 {
-    int nbDevices = 1;
     SamplingDevices result;
-    const std::string deviceList[] = { "/dev/xtrx0" };
+    bool accesable;
 
-    for (int i = 0; i < nbDevices; i++)
+    xtrx_device_info_t devs[64];
+    int res = xtrx_discovery(devs, 64);
+    if (res < 0)
+        return result;
+
+    for (int i = 0; i < res; i++)
     {
-        //std::string serial("N/D");
-        //findSerial((const char *) deviceList[i], serial);
-
         DeviceXTRXParams XTRXParams;
-        XTRXParams.open(deviceList[i].c_str());
+        accesable = XTRXParams.open(devs[i].uniqname);
+        if (!accesable)
+            continue;
         XTRXParams.close();
 
         for (unsigned int j = 0; j < XTRXParams.m_nbRxChannels; j++)
         {
-            qDebug("XTRXInputPlugin::enumSampleSources: device #%d channel %u: %s", i, j, (char *) deviceList[i].c_str());
-            QString displayedName(QString("XTRX[%1:%2] %3").arg(i).arg(j).arg("<unknown>"));
+            qDebug("XTRXInputPlugin::enumSampleSources: device #%d channel %u: %s", i, j, (char *)devs[i].uniqname);
+            QString displayedName(QString("XTRX[%1] %4:%3 Ch:%2").arg(devs[i].uniqname).arg(j).arg(devs[i].speed).arg(devs[i].proto));
             result.append(SamplingDevice(displayedName,
                                          m_hardwareID,
                                          m_deviceTypeID,
-                                         QString(deviceList[i].c_str()),
+                                         QString(devs[i].uniqname),
                                          i,
                                          PluginInterface::SamplingDevice::PhysicalDevice,
                                          true,
